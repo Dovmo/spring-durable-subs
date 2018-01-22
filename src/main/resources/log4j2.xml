@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xml>
+<Configuration xmlns:xi="http://www.w3.org/2001/XInclude"
+	xmlns:log4j='http://jakarta.apache.org/log4j/' status="INFO">
+
+	<Appenders>
+		<Console name="ConsoleAppender" target="SYSTEM_OUT">
+			<PatternLayout
+				pattern="%style{%date{DEFAULT}}{yellow} [%style{%thread}{white}] %highlight{%-5level}{FATAL=bg_red, ERROR=red, WARN=yellow, INFO=green, DEBUG=cyan, TRACE=blue} %style{%logger{4.}}{cyan}: %message%n%throwable" />
+		</Console>
+	</Appenders>
+
+	<Loggers>
+
+		<!-- Log all INFO-level logs to the console -->
+		<Root level="INFO">
+			<AppenderRef ref="ConsoleAppender" />
+		</Root>
+
+	</Loggers>
+</Configuration>
