@@ -10,6 +10,9 @@ import org.apache.activemq.artemis.core.config.impl.ConfigurationImpl;
 import org.apache.activemq.artemis.core.server.ActiveMQServer;
 import org.apache.activemq.artemis.core.server.ActiveMQServers;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+import org.apache.activemq.artemis.jms.client.ActiveMQTopic;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +29,8 @@ public class SharedTopicConsumer {
 	
 	private static final String CONNECTION_URL = "tcp://localhost:61616";
 	private static final String TOPIC_NAME = "exampleTopic";
+	
+	private Logger logger = LoggerFactory.getLogger(SharedTopicConsumer.class);
 	
 	@Bean(destroyMethod = "stop")
 	public ActiveMQServer broker() throws URISyntaxException, Exception {
@@ -53,8 +58,13 @@ public class SharedTopicConsumer {
 			ConnectionFactory connectionFactory) {
 		DefaultJmsListenerContainerFactory dmlc = new DefaultJmsListenerContainerFactory();
 		dmlc.setConnectionFactory(connectionFactory);
+		
+		// This sets the concurrency on the subscription, creating two message consumers
 		dmlc.setConcurrency("2-2");
 		dmlc.setSubscriptionShared(true);
+		
+		// Automatically set with the above #setSubscriptionShared, but doing this for good measure
+		dmlc.setPubSubDomain(true);
 		return dmlc;
 	}
 	
@@ -64,10 +74,12 @@ public class SharedTopicConsumer {
 		jt.setConnectionFactory(connectionFactory);
 		return jt;
 	}
-	
+
+	// Seems to be an error when attempting to create binding to the topic:
+	//     "AMQ119018: Binding already exists LocalQueueBinding" 
 	@JmsListener(destination = TOPIC_NAME, subscription = "sc1")
 	public void destinationListener(String testMessage) {
-		System.out.println(testMessage);
+		logger.info("Received test message: " + testMessage);
 	}
 	
 	public static void main(String [] args) throws Exception {
@@ -75,8 +87,10 @@ public class SharedTopicConsumer {
 		ctx.register(SharedTopicConsumer.class);
 		ctx.refresh();
 		
+		ActiveMQTopic topic = new ActiveMQTopic(TOPIC_NAME);
+		
 		// Send a message
-		ctx.getBean(JmsTemplate.class).convertAndSend(TOPIC_NAME, "This is a string");
+		ctx.getBean(JmsTemplate.class).convertAndSend(topic, "This is a string");
 		
 		// Wait more than enough time for the listener to consume the message
 		TimeUnit.SECONDS.sleep(10);
