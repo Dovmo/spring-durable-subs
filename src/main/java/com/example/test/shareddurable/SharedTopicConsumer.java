@@ -27,7 +27,7 @@ public class SharedTopicConsumer {
 	private static final String CONNECTION_URL = "tcp://localhost:61616";
 	private static final String TOPIC_NAME = "exampleTopic";
 	
-	@Bean
+	@Bean(destroyMethod = "stop")
 	public ActiveMQServer broker() throws URISyntaxException, Exception {
 		ActiveMQServer server = ActiveMQServers.newActiveMQServer(new ConfigurationImpl()
                 .setPersistenceEnabled(false)
@@ -75,9 +75,11 @@ public class SharedTopicConsumer {
 		ctx.register(SharedTopicConsumer.class);
 		ctx.refresh();
 		
+		// Send a message
 		ctx.getBean(JmsTemplate.class).convertAndSend(TOPIC_NAME, "This is a string");
 		
-		TimeUnit.MINUTES.sleep(1);;
+		// Wait more than enough time for the listener to consume the message
+		TimeUnit.SECONDS.sleep(10);
 		
 		ctx.close();
 	}
