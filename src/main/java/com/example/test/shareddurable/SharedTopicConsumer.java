@@ -1,14 +1,15 @@
 package com.example.test.shareddurable;
 
-import java.net.URISyntaxException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import javax.jms.ConnectionFactory;
+import javax.jms.JMSException;
+import javax.jms.Message;
 
-import org.apache.activemq.artemis.api.core.SimpleString;
-import org.apache.activemq.artemis.core.config.impl.ConfigurationImpl;
 import org.apache.activemq.artemis.core.server.ActiveMQServer;
-import org.apache.activemq.artemis.core.server.ActiveMQServers;
+import org.apache.activemq.artemis.core.server.embedded.EmbeddedActiveMQ;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.jms.client.ActiveMQTopic;
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ import org.springframework.jms.annotation.JmsListener;
 import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerContainerFactory;
 import org.springframework.jms.core.JmsTemplate;
+import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.jms.listener.DefaultMessageListenerContainer;
 
 @Configuration
@@ -33,17 +35,11 @@ public class SharedTopicConsumer {
 	private Logger logger = LoggerFactory.getLogger(SharedTopicConsumer.class);
 	
 	@Bean(destroyMethod = "stop")
-	public ActiveMQServer broker() throws URISyntaxException, Exception {
-		ActiveMQServer server = ActiveMQServers.newActiveMQServer(new ConfigurationImpl()
-                .setPersistenceEnabled(false)
-                .setJournalDirectory("target/data/journal")
-                .setSecurityEnabled(false)
-                .addAcceptorConfiguration("tcp", CONNECTION_URL)
-                .setJMXManagementEnabled(true)
-                .setManagementAddress(new SimpleString("0.0.0.0"))
-        );
+	public ActiveMQServer testBroker() throws Exception {
+		EmbeddedActiveMQ server = new EmbeddedActiveMQ();
+		server.setConfigResourcePath("broker.xml");				
 		server.start();
-		return server;
+		return server.getActiveMQServer();
 	}
 	
 	@Bean
@@ -60,8 +56,9 @@ public class SharedTopicConsumer {
 		dmlc.setConnectionFactory(connectionFactory);
 		
 		// This sets the concurrency on the subscription, creating two message consumers
-		dmlc.setConcurrency("2-2");
+		dmlc.setConcurrency("5-10");
 		dmlc.setSubscriptionShared(true);
+		dmlc.setSubscriptionDurable(true);
 		
 		// Automatically set with the above #setSubscriptionShared, but doing this for good measure
 		dmlc.setPubSubDomain(true);
@@ -90,8 +87,17 @@ public class SharedTopicConsumer {
 		ActiveMQTopic topic = new ActiveMQTopic(TOPIC_NAME);
 		
 		// Send a message
-		ctx.getBean(JmsTemplate.class).convertAndSend(topic, "This is a string");
-		
+		IntStream.range(0, 10).forEach(count -> {
+			int randomId = ThreadLocalRandom.current().nextInt(0, 4);
+			ctx.getBean(JmsTemplate.class).convertAndSend(topic, "This is a string #" + randomId,
+					new MessagePostProcessor() {
+						@Override
+						public Message postProcessMessage(Message message) throws JMSException {
+							message.setStringProperty("JMSXGroupID", "" + randomId);
+							return message;
+						}
+					});
+		});
 		// Wait more than enough time for the listener to consume the message
 		TimeUnit.SECONDS.sleep(10);
 		
